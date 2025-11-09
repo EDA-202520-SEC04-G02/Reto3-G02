@@ -1,12 +1,19 @@
 import sys
 
+import App.logic as logic
+from tabulate import tabulate 
+import os
+data_dir = os.path.dirname(os.path.realpath('__file__')) + '/Data/'
+from DataStructures.List import array_list as lt
+
 
 def new_logic():
     """
         Se crea una instancia del controlador
     """
-    #TODO: Llamar la función de la lógica donde se crean las estructuras de datos
-    pass
+    #TODO DONE: Llamar la función de la lógica donde se crean las estructuras de datos
+    control = logic.new_logic()
+    return control
 
 def print_menu():
     print("Bienvenido")
@@ -23,16 +30,53 @@ def load_data(control):
     """
     Carga los datos
     """
-    #TODO: Realizar la carga de datos
-    pass
+    #TOD DONE: Realizar la carga de datos
+    flightsfile = data_dir + "flights_large.csv"  # Ajusta el nombre al archivo real del reto
 
+    # Llamar a la función de lógica
+    resultados = logic.load_data(control, flightsfile)
 
-def print_data(control, id):
+    # Mostrar resultados
+    print("\n=== Resultados de la carga de datos ===")
+    print(f"Tiempo de carga: {resultados['time_ms']:.2f} ms")
+    print(f"Total de vuelos cargados: {resultados['total_flights']}")
+
+    # Preview de los primeros y últimos vuelos
+    print("\nPrimeros y últimos 5 vuelos:")
+    preview = get_preview(control["flights"], 5)
+    headers = ["date", "carrier", "origin", "dest", "dep_delay", "arr_delay", "distance"]
+    table = [[p.get(h, '') for h in headers] for p in preview]
+    print(tabulate(table, headers=headers, tablefmt="grid"))
+
+    return resultados
+
+def get_preview(flights_list, n):
     """
-        Función que imprime un dato dado su ID
+    Retorna los primeros y últimos n vuelos de la lista.
     """
     #TODO: Realizar la función para imprimir un elemento
-    pass
+    total = logic.lt.size(flights_list)
+    preview = logic.lt.new_list()  # lista propia de nuestra estructura
+
+    # Primeros n elementos
+    limit = n if n < total else total
+    for i in range(0, limit):  # 0-based
+        elem = logic.lt.get_element(flights_list, i)
+        logic.lt.add_last(preview, elem)
+
+    # Últimos n elementos (solo si hay más de n)
+    if total > n:
+        start = total - n
+        for i in range(start, total):  # 0-based
+            elem = logic.lt.get_element(flights_list, i)
+            logic.lt.add_last(preview, elem)
+
+    # Convertir la lista de nuestra estructura a una lista de Python para tabulate
+    result = []
+    for i in range(0, logic.lt.size(preview)):
+        result.append(logic.lt.get_element(preview, i))
+
+    return result
 
 def print_req_1(control):
     """
