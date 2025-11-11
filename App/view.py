@@ -28,27 +28,78 @@ def print_menu():
 
 def load_data(control):
     """
-    Carga los datos
+    Vista: solicita archivo, llama a logic.load_data() y muestra los resultados.
     """
-    #TOD DONE: Realizar la carga de datos
-    flightsfile = data_dir + "flights_large.csv"  # Ajusta el nombre al archivo real del reto
+    print("\n=== CARGA DE DATOS ===")
 
-    # Llamar a la función de lógica
+    file_path = data_dir + "flights_large.csv"
+
+    result = logic.load_data(control, file_path)
+
+    print(f"\nTiempo de carga: {result['time']} ms")
+    print(f"Total de vuelos cargados: {result['total']}\n")
+
+    print("Primeros 5 vuelos:")
+    print_flight_table(result["first5"])
+    print("\nÚltimos 5 vuelos:")
+    print_flight_table(result["last5"])
+
+
+def print_flight_table(flights):
+    headers = [
+        "Fecha", "Hora Salida Real", "Hora Llegada Real",
+        "Hora Salida Prog.", "Hora Llegada Prog.",
+        "Código Aerolínea", "Nombre Aerolínea", "Identificador Aeronave",
+        "Origen", "Destino",
+        "Duración (min)", "Distancia (mi)",
+        "Retraso Salida (min)", "Retraso Llegada (min)"
+    ]
+
+    table = []
+    size = lt.size(flights)
+
+    for i in range(size):
+        f = lt.get_element(flights, i)
+        row = [
+            f["date"],
+            f["dep_time"] or "Unknown",
+            f["arr_time"] or "Unknown",
+            f["sched_dep_time"] or "Unknown",
+            f["sched_arr_time"] or "Unknown",
+            f["carrier"],
+            f["name"],
+            f["tailnum"],
+            f["origin"],
+            f["dest"],
+            f["duration"],
+            f["distance"],
+            f["dep_delay"],
+            f["arr_delay"]
+        ]
+        table.append(row)
+
+    print(tabulate(table, headers=headers, tablefmt="grid"))
+
+
+
+
+
+'''
+def load_data(control):
+    flightsfile = data_dir + "flights_large.csv"
     resultados = logic.load_data(control, flightsfile)
 
-    # Mostrar resultados
     print("\n=== Resultados de la carga de datos ===")
     print(f"Tiempo de carga: {resultados['time_ms']:.2f} ms")
     print(f"Total de vuelos cargados: {resultados['total_flights']}")
 
-    # Preview de los primeros y últimos vuelos
     print("\nPrimeros y últimos 5 vuelos:")
-    preview = get_preview(control["flights"], 5)
-    headers = ["date", "carrier", "origin", "dest", "dep_delay", "arr_delay", "distance"]
-    table = [[p.get(h, '') for h in headers] for p in preview]
+    preview = get_preview(resultados["preview"], 5)
+    headers = ["date", "sched_dep_time", "arr_time", "carrier", "name", "tailnum",
+               "origin", "dest", "air_time", "distance"]
+    table = [[p.get(h, 'Unknown') for h in headers] for p in preview]
     print(tabulate(table, headers=headers, tablefmt="grid"))
 
-    return resultados
 
 def get_preview(flights_list, n):
     """
@@ -77,6 +128,8 @@ def get_preview(flights_list, n):
         result.append(logic.lt.get_element(preview, i))
 
     return result
+'''
+
 
 def print_req_1(control):
     """

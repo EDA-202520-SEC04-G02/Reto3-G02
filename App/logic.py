@@ -1,6 +1,6 @@
 import time, csv
 csv.field_size_limit(2147483647)
-
+import codecs
 from datetime import datetime
 
 from DataStructures.Priority_queue import priority_queue as pq
@@ -10,114 +10,263 @@ from DataStructures.Map import map_linear_probing as mp
 from DataStructures.List import array_list as lt
 from DataStructures.List import single_linked_list as sl
 
+import csv
+import time
+import datetime
+
+# ============================================================
+# CREACIÓN DEL CATÁLOGO
+# ============================================================
 
 def new_logic():
-    """
-    Crea el catalogo para almacenar las estructuras de datos
-    """
-    #TODO DONE: Llama a las funciónes de creación de las estructuras de datos
     catalog = {
-        "flights": lt.new_list(),                # Lista completa de vuelos
-        "by_airline": mp.new_map(2000, 0.5),     # Mapa carrier -> lista de vuelos
-        "by_dest": mp.new_map(2000, 0.5),        # Mapa dest -> lista de vuelos
-        "by_date": {"root": None},                # Árbol RBT (inicializado manualmente)
-        "by_airline_delay": mp.new_map(2000, 0.5), # Mapa carrier -> RBT de vuelos por delay
+        "flights": lt.new_list(),
+        "by_date": rbt.new_map(),     # YYYY-MM-DD -> lista de vuelos
+        "by_airline": rbt.new_map(),  # carrier -> lista de vuelos
+        "by_distance": rbt.new_map()  # distancia -> lista de vuelos
     }
-    catalog["by_airline_dest_distance"] = mp.new_map(200, 0.5)
     return catalog
 
-# Funciones para la carga de datos
 
-def load_data(catalog, filename):
+# ============================================================
+# FUNCIONES AUXILIARES
+# ============================================================
+
+def parse_time(hhmm):
+    """Devuelve 'HH:MM' limpio o None si es inválido."""
+    if not hhmm or ":" not in hhmm:
+        return None
+    hh, mm = hhmm.split(":")
+    try:
+        h, m = int(hh), int(mm)
+        if 0 <= h < 24 and 0 <= m < 60:
+            return f"{h:02d}:{m:02d}"
+        return None
+    except:
+        return None
+
+def calc_delay(real, sched):
+    """Calcula retraso en minutos entre hora real y programada, corrigiendo medianoche."""
+    if not real or not sched:
+        return 0
+    try:
+        h1, m1 = map(int, real.split(":"))
+        h2, m2 = map(int, sched.split(":"))
+        total_real = h1 * 60 + m1
+        total_sched = h2 * 60 + m2
+        diff = total_real - total_sched
+
+        # Corrige medianoche (si la diferencia es mayor a 12h o menor a -12h)
+        if diff < -720:
+            diff += 1440
+        elif diff > 720:
+            diff -= 1440
+
+        return diff
+    except:
+        return 0
+
+def calc_duration(dep, arr):
+    """Duración en minutos sin datetime."""
+    if not dep or not arr:
+        return 0
+    try:
+        h1, m1 = map(int, dep.split(":"))
+        h2, m2 = map(int, arr.split(":"))
+        total1 = h1 * 60 + m1
+        total2 = h2 * 60 + m2
+        diff = total2 - total1
+        if diff < 0:
+            diff += 1440  # corrige medianoche
+        return diff
+    except:
+        return 0
+
+def add_to_index(index, key, flight):
+    node = rbt.get(index, key)
+    if node is None:
+        lst = lt.new_list()
+        lt.add_last(lst, flight)
+        rbt.put(index, key, lst)
+    else:
+        lt.add_last(node, flight)
+
+
+# ============================================================
+# LIMPIEZA Y FORMATEO DEL VUELO
+# ============================================================
+
+def format_flight(raw):
+    flight = {
+        "id": raw["id"],
+        "date": raw["date"],
+        "dep_time": parse_time(raw["dep_time"]),
+        "sched_dep_time": parse_time(raw["sched_dep_time"]),
+        "arr_time": parse_time(raw["arr_time"]),
+        "sched_arr_time": parse_time(raw["sched_arr_time"]),
+        "carrier": raw["carrier"],
+        "flight": raw["flight"],
+        "tailnum": raw["tailnum"],
+        "origin": raw["origin"],
+        "dest": raw["dest"],
+        "name": raw["name"]
+    }
+
+    # numéricos
+    try:
+        flight["air_time"] = float(raw["air_time"])
+    except:
+        flight["air_time"] = 0
+
+    try:
+        flight["distance"] = float(raw["distance"])
+    except:
+        flight["distance"] = 0
+
+    # retrasos
+    flight["dep_delay"] = calc_delay(flight["dep_time"], flight["sched_dep_time"])
+    flight["arr_delay"] = calc_delay(flight["arr_time"], flight["sched_arr_time"])
+
+    # duración
+    flight["duration"] = (
+        flight["air_time"]
+        if flight["air_time"] > 0
+        else calc_duration(flight["dep_time"], flight["arr_time"])
+    )
+
+    return flight
+
+
+
+# ============================================================
+# ORDENAMIENTO
+# ============================================================
+
+def sort_by_date_time(flights):
     """
-    Carga los datos del reto
+    Ordena vuelos por fecha, luego por hora programada de salida,
+    y finalmente por ID (para mantener el orden original del CSV).
     """
-    
-    # Iniciar medición de tiempo
-    start = get_time()
+    def cmp(f1, f2):
+        # comparar fecha
+        if f1["date"] < f2["date"]:
+            return True
+        elif f1["date"] > f2["date"]:
+            return False
 
-    with open(filename, encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for flight in reader:
-            clean_flight = format_flight(flight)
+        # misma fecha -> comparar hora programada
+        t1, t2 = f1["sched_dep_time"], f2["sched_dep_time"]
+        if not t1 and t2:
+            return False
+        if t1 and not t2:
+            return True
+        if t1 and t2 and t1 != t2:
+            return t1 < t2
 
-            # Insertar vuelo en la lista general
-            lt.add_last(catalog["flights"], clean_flight)
+        # misma fecha y misma hora programada -> desempatar por id
+        try:
+            return int(f1["id"]) < int(f2["id"])
+        except:
+            return False
 
-            # Indexar por aerolínea
-            add_by_airline(catalog, clean_flight)
+    return lt.merge_sort(flights, cmp)
 
-            # Indexar por aeropuerto destino
-            add_by_dest(catalog, clean_flight)
+# ============================================================
+# CARGA DE DATOS (VERSIÓN SIMPLE Y ROBUSTA)
+# ============================================================
 
-            # Indexar por fecha
-            add_by_date(catalog, clean_flight)
-            
-            add_by_airline_delay(catalog, clean_flight)
-            add_by_airline_dest_distance(catalog, clean_flight)
-    # Detener medición de tiempo
-    end = get_time()
-    delta = delta_time(start, end)
+def load_data(catalog, file_path):
+    start = time.perf_counter()
+    with codecs.open(file_path, "r", encoding="utf-8-sig") as csvfile:
+        reader = csv.DictReader(csvfile)
 
-    total = lt.size(catalog["flights"])
+        for row in reader:
+            flight = format_flight(row)
+
+            lt.add_last(catalog["flights"], flight)
+            add_to_index(catalog["by_date"], flight["date"], flight)
+            add_to_index(catalog["by_airline"], flight["carrier"], flight)
+            add_to_index(catalog["by_distance"], flight["distance"], flight)
+
+    flights_sorted = sort_by_date_time(catalog["flights"])
+    total = lt.size(flights_sorted)
+
+    first5 = lt.sub_list(flights_sorted, 0, min(5, total))
+    last5 = lt.sub_list(flights_sorted, max(0, total - 5), min(5, total))
+
+    end = time.perf_counter()
 
     return {
-        "time_ms": delta,
-        "total_flights": total
+        "time": round((end - start) * 1000, 2),
+        "total": total,
+        "first5": first5,
+        "last5": last5
     }
+
+
+'''
+# Funciones para la carga de datos
+
+def load_data(catalog, flightsfile):
+    start = get_time()
+
+    with open(flightsfile, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            flight = format_flight(row)
+            lt.add_last(mp.get(catalog, "vuelos")["value"], flight)
+            add_to_indices(catalog, flight)
+
+    end = get_time()
+
+    # ordenar por fecha y hora programada
+    sorted_flights = sort_flights_by_sched_datetime(mp.get(catalog, "vuelos")["value"])
+
+    # preparar datos para el preview
+    preview = []
+    size = lt.size(sorted_flights)
+    for i in range(1, 6):
+        preview.append(get_flight_info(lt.get_element(sorted_flights, i)))
+    for i in range(size - 4, size + 1):
+        preview.append(get_flight_info(lt.get_element(sorted_flights, i)))
+
+    return {
+        "time_ms": delta_time(start, end),
+        "total_flights": size,
+        "preview": preview
+    }
+
+def sort_flights_by_sched_datetime(flights):
+    """
+    Ordena vuelos por fecha + hora programada de salida.
+    """
+    from datetime import datetime
+
+    def key_func(f):
+        try:
+            date = f.get("date", "")
+            sched = f.get("sched_dep_time", "")
+            return datetime.strptime(f"{date} {sched}", "%Y-%m-%d %H:%M")
+        except Exception:
+            return datetime.max
+
+    # Convertimos a lista Python, ordenamos y regresamos como array_list
+    temp = [lt.get_element(flights, i) for i in range(0, lt.size(flights))]
+    temp.sort(key=key_func)
+
+    sorted_list = lt.new_list()
+    for f in temp:
+        lt.add_last(sorted_list, f)
+
+    return sorted_list
+
 
 
 # ==========================================================
 # FORMATEO Y PREPROCESAMIENTO DE VUELOS
 # ==========================================================
 
-def format_flight(flight):
-    """
-    Limpia y agrega campos derivados a cada vuelo.
-    """
 
-    def safe_time(val):
-        if not val:
-            return None
-        try:
-            return datetime.strptime(val.strip(), "%H:%M")
-        except ValueError:
-            return None
-
-    def calc_delay(real, sched):
-        if not real or not sched:
-            return 0
-        real_dt = safe_time(real)
-        sched_dt = safe_time(sched)
-        if not real_dt or not sched_dt:
-            return 0
-        diff = (real_dt - sched_dt).total_seconds() / 60
-        # Ajuste si cruza medianoche
-        if diff < -720:  # más de 12h atrás
-            diff += 1440
-        elif diff > 720:  # más de 12h adelante
-            diff -= 1440
-        return diff
-
-    # Cálculos derivados
-    flight["dep_delay"] = calc_delay(flight.get("dep_time"), flight.get("sched_dep_time"))
-    flight["arr_delay"] = calc_delay(flight.get("arr_time"), flight.get("sched_arr_time"))
-
-    # Limpieza de numéricos
-    try:
-        flight["distance"] = float(flight["distance"]) if flight.get("distance") not in (None, "") else 0.0
-    except (ValueError, TypeError):
-        flight["distance"] = 0.0
-
-    try:
-        flight["air_time"] = float(flight["air_time"]) if flight.get("air_time") not in (None, "") else 0.0
-    except (ValueError, TypeError):
-        flight["air_time"] = 0.0
-
-    # Normalización de fecha
-    flight["date"] = flight.get("date") if flight.get("date") else "Unknown"
-
-    return flight
 
 # ==========================================================
 # ÍNDICES DE BÚSQUEDA
@@ -227,6 +376,7 @@ def add_by_date(catalog, flight):
 
 # Funciones de consulta sobre el catálogo
 
+'''
 
 def req_1(catalog, airline_code, min_delay, max_delay):
     """
