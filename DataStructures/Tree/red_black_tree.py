@@ -2,6 +2,19 @@ from DataStructures.Tree import rbt_node as rbt
 from DataStructures.List import single_linked_list as sl
 
 
+def new_map():
+    """
+    Crea una tabla de símbolos ordenada basada en un árbol rojo-negro (RBT) vacío.
+
+    Retorna un diccionario con los campos necesarios para representar el árbol.
+    """
+    rbt = {
+        "root": None,   # Raíz del árbol
+        "type": "RBT"   # Identificador del tipo de estructura
+    }
+    return rbt
+
+
 def default_compare(a, b):
     
     if a == b:
