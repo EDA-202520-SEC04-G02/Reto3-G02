@@ -13,6 +13,7 @@ from DataStructures.List import single_linked_list as sl
 import csv
 import time
 import datetime
+import math
 
 # ============================================================
 # CREACIÓN DEL CATÁLOGO
@@ -573,19 +574,315 @@ def req_4(catalog, date_start, date_end, time_start, time_end, top_n):
     }
 
 
-def req_5(catalog):
+def req_5(catalog, date_start, date_end, dest_code, top_n):
     """
     Retorna el resultado del requerimiento 5
     """
-    # TODO: Modificar el requerimiento 5
-    pass
 
-def req_6(catalog):
+    start = get_time()
+
+    flights_list = catalog["flights"]
+    n_flights = lt.size(flights_list)
+
+    
+    airlines_map = mp.new_map(200, 0.5)
+
+    
+    i = 0
+    while i < n_flights:
+        flight = lt.get_element(flights_list, i)
+
+        
+        date = flight.get("date")
+        dest = flight.get("dest")
+        carrier = flight.get("carrier")
+
+       
+        process = True
+
+        if not date or not dest or not carrier:
+            process = False
+        if process:
+            if not (date_start <= date <= date_end):
+                process = False
+        if process:
+            if dest != dest_code:
+                process = False
+
+        if process:
+            delay = float(flight.get("arr_delay", 0))     
+            duration = float(flight.get("duration", 0))
+            distance = float(flight.get("distance", 0))
+
+            record = mp.get(airlines_map, carrier)
+            if record is None:
+                record = {
+                    "carrier": carrier,
+                    "total_vuelos": 0,
+                    "sum_delay": 0.0,
+                    "sum_duration": 0.0,
+                    "sum_distance": 0.0,
+                    "max_dist_flight": None
+                }
+                mp.put(airlines_map, carrier, record)
+
+            record["total_vuelos"] += 1
+            record["sum_delay"] += delay
+            record["sum_duration"] += duration
+            record["sum_distance"] += distance
+
+            
+            max_f = record["max_dist_flight"]
+            if max_f is None:
+                record["max_dist_flight"] = flight
+            else:
+                current_max_dist = float(max_f.get("distance", 0))
+                if distance > current_max_dist:
+                    record["max_dist_flight"] = flight
+
+        i += 1
+
+   
+    keys_struct = mp.key_set(airlines_map)
+
+   
+    if keys_struct is None or "elements" not in keys_struct:
+        end = get_time()
+        return {
+            "time_ms": delta_time(start, end),
+            "total_airlines": 0,
+            "airlines": lt.new_list()
+        }
+
+    keys = keys_struct["elements"]
+    if len(keys) == 0:
+        end = get_time()
+        return {
+            "time_ms": delta_time(start, end),
+            "total_airlines": 0,
+            "airlines": lt.new_list()
+        }
+
+    pq_top = pq.new_heap(is_min_pq=True)
+
+    idx = 0
+    while idx < len(keys):
+        carrier = keys[idx]
+        record = mp.get(airlines_map, carrier)
+
+        if record is not None:
+            total = record["total_vuelos"]
+
+            if total > 0:
+                avg_delay = record["sum_delay"] / total
+                avg_duration = record["sum_duration"] / total
+                avg_distance = record["sum_distance"] / total
+
+                record["avg_delay"] = avg_delay
+                record["avg_duration"] = avg_duration
+                record["avg_distance"] = avg_distance
+
+                abs_punct = abs(avg_delay)
+                record["abs_punctuality"] = abs_punct
+
+                
+                priority_key = (abs_punct, carrier)
+                pq.insert(pq_top, priority_key, record)
+
+        idx += 1
+
+   
+    result_list = lt.new_list()
+    count = 0
+
+    while not pq.is_empty(pq_top) and count < top_n:
+        record = pq.remove(pq_top)
+        lt.add_last(result_list, record)
+        count += 1
+
+    end = get_time()
+
+    return {
+        "time_ms": delta_time(start, end),
+        "total_airlines": count,    
+        "airlines": result_list      
+    }
+
+def req_6(catalog, date_start, date_end, min_distance, max_distance, top_m):
     """
     Retorna el resultado del requerimiento 6
     """
     # TODO: Modificar el requerimiento 6
-    pass
+
+    start = get_time()
+
+    flights_list = catalog["flights"]
+    n_flights = lt.size(flights_list)
+
+    min_distance = float(min_distance)
+    max_distance = float(max_distance)
+
+   
+    airlines_map = mp.new_map(200, 0.5)
+
+    
+    i = 0
+    while i < n_flights:
+        flight = lt.get_element(flights_list, i)
+
+        date = flight.get("date")
+        carrier = flight.get("carrier")
+
+        process = True
+
+        if not date or not carrier:
+            process = False
+
+        if process:
+            if not (date_start <= date <= date_end):
+                process = False
+
+        if process:
+            distance = float(flight.get("distance", 0))
+            if distance < min_distance or distance > max_distance:
+                process = False
+
+        if process:
+            delay = float(flight.get("dep_delay", 0))
+
+            record = mp.get(airlines_map, carrier)
+            if record is None:
+                record = {
+                    "carrier": carrier,
+                    "total_vuelos": 0,
+                    "sum_delay": 0.0,
+                    "sum_sq_delay": 0.0,
+                    "mean_delay": 0.0,
+                    "std_delay": 0.0,
+                    "best_flight": None,
+                    "best_diff": None
+                }
+                mp.put(airlines_map, carrier, record)
+
+            record["total_vuelos"] += 1
+            record["sum_delay"] += delay
+            record["sum_sq_delay"] += delay * delay
+
+        i += 1
+
+    keys_struct = mp.key_set(airlines_map)
+
+    if keys_struct is None or "elements" not in keys_struct:
+        end = get_time()
+        return {
+            "time_ms": delta_time(start, end),
+            "total_airlines": 0,
+            "airlines": lt.new_list()
+        }
+
+    keys = keys_struct["elements"]
+    if len(keys) == 0:
+        end = get_time()
+        return {
+            "time_ms": delta_time(start, end),
+            "total_airlines": 0,
+            "airlines": lt.new_list()
+        }
+
+    
+    idx = 0
+    while idx < len(keys):
+        carrier = keys[idx]
+        record = mp.get(airlines_map, carrier)
+
+        if record is not None:
+            n = record["total_vuelos"]
+            if n > 0:
+                mean = record["sum_delay"] / n
+                variance = (record["sum_sq_delay"] / n) - (mean * mean)
+                if variance < 0:
+                    variance = 0.0
+                std = math.sqrt(variance)
+            else:
+                mean = 0.0
+                std = 0.0
+
+            record["mean_delay"] = mean
+            record["std_delay"] = std
+            record["best_flight"] = None
+            record["best_diff"] = None
+
+        idx += 1
+
+  
+    i = 0
+    while i < n_flights:
+        flight = lt.get_element(flights_list, i)
+
+        date = flight.get("date")
+        carrier = flight.get("carrier")
+
+        process = True
+
+        if not date or not carrier:
+            process = False
+
+        if process:
+            if not (date_start <= date <= date_end):
+                process = False
+
+        if process:
+            distance = float(flight.get("distance", 0))
+            if distance < min_distance or distance > max_distance:
+                process = False
+
+        if process:
+            record = mp.get(airlines_map, carrier)
+            if record is not None:
+                delay = float(flight.get("dep_delay", 0))
+                diff = abs(delay - record["mean_delay"])
+
+                if record["best_flight"] is None:
+                    record["best_flight"] = flight
+                    record["best_diff"] = diff
+                else:
+                    if diff < record["best_diff"]:
+                        record["best_flight"] = flight
+                        record["best_diff"] = diff
+
+        i += 1
+
+   
+    pq_top = pq.new_heap(is_min_pq=True)
+
+    idx = 0
+    while idx < len(keys):
+        carrier = keys[idx]
+        record = mp.get(airlines_map, carrier)
+
+        if record is not None:
+            if record["total_vuelos"] > 0:
+                priority_key = (record["std_delay"], record["mean_delay"])
+                pq.insert(pq_top, priority_key, record)
+
+        idx += 1
+
+    
+    result_list = lt.new_list()
+    count = 0
+
+    while (not pq.is_empty(pq_top)) and (count < top_m):
+        record = pq.remove(pq_top)
+        lt.add_last(result_list, record)
+        count += 1
+
+    end = get_time()
+
+    return {
+        "time_ms": delta_time(start, end),
+        "total_airlines": count,
+        "airlines": result_list
+    }
 
 
 # Funciones para medir tiempos de ejecucion

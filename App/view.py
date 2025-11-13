@@ -313,7 +313,70 @@ def print_req_5(control):
         Función que imprime la solución del Requerimiento 5 en consola
     """
     # TODO: Imprimir el resultado del requerimiento 5
-    pass
+    
+    
+    date_start = input("Ingrese la fecha inicial (YYYY-MM-DD): ").strip()
+    date_end = input("Ingrese la fecha final (YYYY-MM-DD): ").strip()
+    dest_code = input("Ingrese el código del aeropuerto de destino (ej: JFK, LAX): ").strip().upper()
+    top_n = int(input("Ingrese la cantidad N de aerolíneas más puntuales a mostrar: "))
+
+
+    result = logic.req_5(control, date_start, date_end, dest_code, top_n)
+
+    print("\n=== Requerimiento 5 ===")
+    print(f"Rango de fechas: {date_start} a {date_end}")
+    print(f"Aeropuerto de destino: {dest_code}")
+    print(f"Tiempo de ejecución: {result['time_ms']:.2f} ms")
+    print(f"N aerolíneas retornadas: {result['total_airlines']}")
+
+    airlines = result["airlines"]
+
+    if lt.size(airlines) == 0:
+        print("No se encontraron vuelos que cumplan las condiciones.")
+        return
+
+    headers = [
+        "Aerolínea",
+        "Total vuelos",
+        "Duración prom. (min)",
+        "Distancia prom. (mi)",
+        "Puntualidad prom. llegada (min)",
+        "ID vuelo máx. distancia",
+        "Código vuelo",
+        "Fecha llegada",
+        "Hora llegada",
+        "Origen",
+        "Destino",
+        "Duración vuelo (min)",
+        "Distancia vuelo (mi)"
+    ]
+
+    table = []
+
+    for i in range(0, lt.size(airlines)):
+        a = lt.get_element(airlines, i)
+        max_f = a["max_dist_flight"]
+
+        fecha_llegada = max_f.get("date", "")
+        hora_llegada = max_f.get("arr_time", "") or max_f.get("sched_arr_time", "")
+
+        table.append([
+            a.get("carrier", ""),
+            a.get("total_vuelos", 0),
+            round(a.get("avg_duration", 0.0), 2),
+            round(a.get("avg_distance", 0.0), 2),
+            round(a.get("avg_delay", 0.0), 2),
+            max_f.get("id", ""),
+            max_f.get("flight", ""),
+            fecha_llegada,
+            hora_llegada,
+            max_f.get("origin", ""),
+            max_f.get("dest", ""),
+            round(max_f.get("duration", 0.0), 2),
+            round(max_f.get("distance", 0.0), 2)
+        ])
+
+    print(tabulate(table, headers=headers, tablefmt="grid"))
 
 
 def print_req_6(control):
@@ -321,7 +384,66 @@ def print_req_6(control):
         Función que imprime la solución del Requerimiento 6 en consola
     """
     # TODO: Imprimir el resultado del requerimiento 6
-    pass
+
+    date_start = input("Ingrese la fecha inicial (YYYY-MM-DD): ").strip()
+    date_end = input("Ingrese la fecha final (YYYY-MM-DD): ").strip()
+    min_dist = float(input("Ingrese la distancia mínima (en millas): "))
+    max_dist = float(input("Ingrese la distancia máxima (en millas): "))
+    top_m = int(input("Ingrese la cantidad M de aerolíneas más estables a mostrar: "))
+
+    result = logic.req_6(control, date_start, date_end, min_dist, max_dist, top_m)
+
+    print("\n=== Requerimiento 6 ===")
+    print(f"Rango de fechas: {date_start} a {date_end}")
+    print(f"Rango de distancias: {min_dist} - {max_dist} millas")
+    print(f"Tiempo de ejecución: {result['time_ms']:.2f} ms")
+    print(f"M aerolíneas retornadas: {result['total_airlines']}")
+
+    airlines = result["airlines"]
+
+    if lt.size(airlines) == 0:
+        print("No se encontraron vuelos que cumplan las condiciones.")
+        return
+
+    
+    headers = [
+        "Aerolínea",
+        "Total vuelos",
+        "Prom. retraso/anticipo salida (min)",
+        "Estabilidad salida (desv. estándar, min)",
+        "ID vuelo representativo",
+        "Código vuelo",
+        "Fecha salida",
+        "Hora salida",
+        "Origen",
+        "Destino",
+        "Retraso vuelo (min)"
+    ]
+
+    table = []
+
+    for i in range(0, lt.size(airlines)):
+        a = lt.get_element(airlines, i)
+        best_f = a["best_flight"]
+
+        fecha_salida = best_f.get("date", "")
+        hora_salida = best_f.get("dep_time", "") or best_f.get("sched_dep_time", "")
+
+        table.append([
+            a.get("carrier", ""),
+            a.get("total_vuelos", 0),
+            round(a.get("mean_delay", 0.0), 2),
+            round(a.get("std_delay", 0.0), 2),
+            best_f.get("id", ""),
+            best_f.get("flight", ""),
+            fecha_salida,
+            hora_salida,
+            best_f.get("origin", ""),
+            best_f.get("dest", ""),
+            round(best_f.get("dep_delay", 0.0), 2)
+        ])
+
+    print(tabulate(table, headers=headers, tablefmt="grid"))
 
 # Se crea la lógica asociado a la vista
 control = new_logic()
@@ -354,7 +476,7 @@ def main():
         elif int(inputs) == 5:
             print_req_5(control)
 
-        elif int(inputs) == 5:
+        elif int(inputs) == 6:
             print_req_6(control)
 
         elif int(inputs) == 7:
