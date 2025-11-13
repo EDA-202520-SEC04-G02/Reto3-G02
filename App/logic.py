@@ -380,37 +380,50 @@ def add_by_date(catalog, flight):
 '''
 
 def req_1(catalog, airline_code, min_delay, max_delay):
-    """
-    Retorna el resultado del requerimiento 1
-    """
-    # TODO DONE: Modificar el requerimiento 1
     start = get_time()
 
-    delay_tree = mp.get(catalog["by_airline_delay"], airline_code)
-    if delay_tree is None:
-        end = get_time()
+    # 1️⃣ Buscar lista de vuelos de esa aerolínea en el RBT
+    flights = rbt.get(catalog["by_airline"], airline_code)
+    if not flights:
         return {
-            "airline": airline_code,
-            "total_in_range": 0,
-            "flights": lt.new_list(),
-            "time_ms": delta_time(start, end)
+            "time": 0,
+            "total": 0,
+            "filtered": lt.new_list()
         }
 
-    # Buscar los vuelos dentro del rango
-    key_min = (min_delay, "")
-    key_max = (max_delay, "zzz")
-    flights_in_range = rbt.values(delay_tree, key_min, key_max)
+    # 2️⃣ Filtrar vuelos dentro del rango de retraso
+    filtered = lt.new_list()
+    size = lt.size(flights)
+    for i in range(size):
+        f = lt.get_element(flights, i)
+        delay = f["dep_delay"]
+        if delay is not None and min_delay <= delay <= max_delay:
+            lt.add_last(filtered, f)
 
-    total = sl.size(flights_in_range)
-    end = get_time()
+    # 3️⃣ Ordenar por retraso ascendente, luego fecha y hora
+    def cmp(f1, f2):
+        if f1["dep_delay"] != f2["dep_delay"]:
+            return f1["dep_delay"] < f2["dep_delay"]
+        elif f1["date"] != f2["date"]:
+            return f1["date"] < f2["date"]
+        return (f1["dep_time"] or "") < (f2["dep_time"] or "")
+
+    sorted_filtered = lt.merge_sort(filtered, cmp)
+
+    # 4️⃣ Calcular totales y tiempos
+    total = lt.size(sorted_filtered)
+    end = time.perf_counter()
+
+    # 5️⃣ Sublistas de primeros y últimos 5
+    first5 = lt.sub_list(sorted_filtered, 0, min(5, total))
+    last5 = lt.sub_list(sorted_filtered, max(0, total - 5), min(5, total))
 
     return {
-        "airline": airline_code,
-        "total_in_range": total,
-        "flights": flights_in_range,
-        "time_ms": delta_time(start, end)
+        "time": round((end - start) * 1000, 2),
+        "total": total,
+        "first5": first5,
+        "last5": last5
     }
-
 
 def req_2(catalog):
     """
