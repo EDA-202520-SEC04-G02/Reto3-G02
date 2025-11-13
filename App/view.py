@@ -132,61 +132,78 @@ def get_preview(flights_list, n):
 
 
 def print_req_1(control):
+    """5
+    Requerimiento 1:
+    Dada una aerolínea, listar los vuelos con retraso de salida dentro de un rango específico de minutos.
     """
-        Función que imprime la solución del Requerimiento 1 en consola
-    """
-    # TODO DONE: Imprimir el resultado del requerimiento 1
+    print("\n=== Requerimiento 1: Retrasos por Aerolínea ===")
 
-    airline = input("Ingrese el código de la aerolínea (ej: UA, DL, AA): ").strip().upper()
-    min_delay = float(input("Ingrese el retraso mínimo (en minutos): "))
-    max_delay = float(input("Ingrese el retraso máximo (en minutos): "))
+    # Entrada de parámetros
+    code = input("Ingrese el código de la aerolínea (ej: 'UA'): ").strip().upper()
+    min_d = int(input("Ingrese el retraso mínimo (en minutos): "))
+    max_d = int(input("Ingrese el retraso máximo (en minutos): "))
 
-    result = logic.req_1(control, airline, min_delay, max_delay)
+    # Llamado al controlador
+    result = logic.req_1(control, code, min_d, max_d)
 
-    print("\n=== Requerimiento 1 ===")
-    print(f"Aerolínea: {airline}")
-    print(f"Tiempo de ejecución: {result['time_ms']:.2f} ms")
-    print(f"Total de vuelos en el rango: {result['total_in_range']}")
-    print(f"Retraso entre {min_delay} y {max_delay} minutos")
+    print(f"\nTiempo de ejecución: {result['time']} ms")
+    print(f"Total de vuelos con retraso dentro del rango: {result['total']}")
 
-    flights = sl_to_arraylist(result["flights"])
-    total = result["total_in_range"]
-
-    if total == 0:
-        print("No se encontraron vuelos en el rango especificado.")
+    if result["total"] == 0:
+        print("No se encontraron vuelos en ese rango para la aerolínea seleccionada.")
         return
 
-    # Mostrar los 5 primeros y 5 últimos vuelos si hay más de 10
-    limit = 5
-    flights_to_show = lt.new_list()
-
-    if total <= 10:
-        flights_to_show = flights
-    else:
-        # Agregar los primeros 5
-        for i in range(0, limit):
-            lt.add_last(flights_to_show, lt.get_element(flights, i))
-        # Agregar los últimos 5
-        for i in range(total - limit, total):
-            lt.add_last(flights_to_show, lt.get_element(flights, i))
-
-    # Preparar tabla
-    headers = ["flight", "date", "carrier", "name", "origin", "dest", "dep_delay"]
+    # =====================
+    # Tabla: primeros 5 vuelos
+    # =====================
+    print("\nPrimeros 5 vuelos:")
+    headers = [
+        "ID", "Código Vuelo", "Fecha",
+        "Nombre Aerolínea", "Código Aerolínea",
+        "Origen", "Destino", "Retraso Salida (min)"
+    ]
     table = []
+    size = lt.size(result["first5"])
 
-    for i in range(0, lt.size(flights_to_show)):
-        f = lt.get_element(flights_to_show, i)
-        table.append([
-            f.get("flight", ""),
-            f.get("date", ""),
-            f.get("carrier", ""),
-            f.get("name", ""),
-            f.get("origin", ""),
-            f.get("dest", ""),
-            f.get("dep_delay", 0)
-        ])
+    for i in range(size):
+        f = lt.get_element(result["first5"], i)
+        row = [
+            f["id"],
+            f["flight"],
+            f["date"],
+            f["name"],
+            f["carrier"],
+            f["origin"],
+            f["dest"],
+            f["dep_delay"]
+        ]
+        table.append(row)
 
     print(tabulate(table, headers=headers, tablefmt="grid"))
+
+    # =====================
+    # Tabla: últimos 5 vuelos
+    # =====================
+    print("\nÚltimos 5 vuelos:")
+    table = []
+    size = lt.size(result["last5"])
+
+    for i in range(size):
+        f = lt.get_element(result["last5"], i)
+        row = [
+            f["id"],
+            f["flight"],
+            f["date"],
+            f["name"],
+            f["carrier"],
+            f["origin"],
+            f["dest"],
+            f["dep_delay"]
+        ]
+        table.append(row)
+
+    print(tabulate(table, headers=headers, tablefmt="grid"))
+
 
 def print_req_2(control):
     """

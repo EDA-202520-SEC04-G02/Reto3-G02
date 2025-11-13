@@ -52,6 +52,7 @@ def verify_with_pandas(file_path):
     df["dep_delay"] = df.apply(lambda r: calc_delay(r["dep_time"], r["sched_dep_time"]), axis=1)
     df["arr_delay"] = df.apply(lambda r: calc_delay(r["arr_time"], r["sched_arr_time"]), axis=1)
 
+
     # ============================================================
     # Ordenar según guía oficial
     # ============================================================
