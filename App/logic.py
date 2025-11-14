@@ -146,29 +146,14 @@ def format_flight(raw):
 def sort_by_date_time(flights):
     """
     Ordena vuelos por fecha, luego por hora programada de salida,
-    y finalmente por ID (para mantener el orden original del CSV).
+    y finalmente por ID (orden de llegada en el CSV).
     """
     def cmp(f1, f2):
-        # comparar fecha
-        if f1["date"] < f2["date"]:
-            return True
-        elif f1["date"] > f2["date"]:
-            return False
-
-        # misma fecha -> comparar hora programada
-        t1, t2 = f1["sched_dep_time"], f2["sched_dep_time"]
-        if not t1 and t2:
-            return False
-        if t1 and not t2:
-            return True
-        if t1 and t2 and t1 != t2:
-            return t1 < t2
-
-        # misma fecha y misma hora programada -> desempatar por id
-        try:
-            return int(f1["id"]) < int(f2["id"])
-        except:
-            return False
+        if f1["date"] != f2["date"]:
+            return f1["date"] < f2["date"]
+        if f1["sched_dep_time"] != f2["sched_dep_time"]:
+            return f1["sched_dep_time"] < f2["sched_dep_time"]
+        return int(f1["id"]) < int(f2["id"])
 
     return lt.merge_sort(flights, cmp)
 
@@ -205,184 +190,10 @@ def load_data(catalog, file_path):
     }
 
 
-'''
-# Funciones para la carga de datos
-
-def load_data(catalog, flightsfile):
-    start = get_time()
-
-    with open(flightsfile, encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            flight = format_flight(row)
-            lt.add_last(mp.get(catalog, "vuelos")["value"], flight)
-            add_to_indices(catalog, flight)
-
-    end = get_time()
-
-    # ordenar por fecha y hora programada
-    sorted_flights = sort_flights_by_sched_datetime(mp.get(catalog, "vuelos")["value"])
-
-    # preparar datos para el preview
-    preview = []
-    size = lt.size(sorted_flights)
-    for i in range(1, 6):
-        preview.append(get_flight_info(lt.get_element(sorted_flights, i)))
-    for i in range(size - 4, size + 1):
-        preview.append(get_flight_info(lt.get_element(sorted_flights, i)))
-
-    return {
-        "time_ms": delta_time(start, end),
-        "total_flights": size,
-        "preview": preview
-    }
-
-def sort_flights_by_sched_datetime(flights):
-    """
-    Ordena vuelos por fecha + hora programada de salida.
-    """
-    from datetime import datetime
-
-    def key_func(f):
-        try:
-            date = f.get("date", "")
-            sched = f.get("sched_dep_time", "")
-            return datetime.strptime(f"{date} {sched}", "%Y-%m-%d %H:%M")
-        except Exception:
-            return datetime.max
-
-    # Convertimos a lista Python, ordenamos y regresamos como array_list
-    temp = [lt.get_element(flights, i) for i in range(0, lt.size(flights))]
-    temp.sort(key=key_func)
-
-    sorted_list = lt.new_list()
-    for f in temp:
-        lt.add_last(sorted_list, f)
-
-    return sorted_list
-
-
-
-# ==========================================================
-# FORMATEO Y PREPROCESAMIENTO DE VUELOS
-# ==========================================================
-
-
-
-# ==========================================================
-# ÍNDICES DE BÚSQUEDA
-# ==========================================================
-
-def add_by_airline_dest_distance(catalog, flight):
-    """
-    Indexa un vuelo por (aerolínea -> destino -> distancia) en un mapa de mapas.
-    Nivel 1: carrier (aerolínea)
-    Nivel 2: destino
-    Valor final: árbol RBT ordenado por (distance, fecha_hora_llegada)
-    """
-    carrier = flight.get("carrier")
-    dest = flight.get("dest")
-    distance = float(flight.get("distance", 0))
-
-    if not carrier or not dest:
-        return
-
-    # Obtener mapa de destinos de la aerolínea
-    airline_map = mp.get(catalog["by_airline_dest_distance"], carrier)
-    if airline_map is None:
-        airline_map = mp.new_map(100, 0.5)   # mapa interno de destinos
-        mp.put(catalog["by_airline_dest_distance"], carrier, airline_map)
-
-    # Obtener árbol del aeropuerto destino
-    distance_tree = mp.get(airline_map, dest)
-    if distance_tree is None:
-        distance_tree = {"root": None}
-        mp.put(airline_map, dest, distance_tree)
-
-    # Clave ordenable: (distancia, fecha + hora llegada)
-    key = (distance, f"{flight.get('date', '')}_{flight.get('arr_time', '')}")
-    rbt.put(distance_tree, key, flight)
-
-
-def add_by_airline_delay(catalog, flight):
-    """
-    Indexa un vuelo en el árbol de retrasos (dep_delay) de su aerolínea.
-    Clave: (dep_delay, fecha_hora)
-    Valor: diccionario completo del vuelo.
-    """
-
-    carrier = flight.get("carrier")
-    delay = float(flight.get("dep_delay", 0))
-
-    if carrier is None:
-        return
-
-    # Buscar o crear el árbol de la aerolínea
-    delay_tree = mp.get(catalog["by_airline_delay"], carrier)
-    if delay_tree is None:
-        delay_tree = {"root": None}  # tu implementación de RBT no tiene new_tree()
-        mp.put(catalog["by_airline_delay"], carrier, delay_tree)
-
-    # Crear clave ordenable (retraso + fecha_hora para desempatar)
-    key = (delay, f"{flight.get('date', '')}_{flight.get('dep_time', '')}")
-
-    # Insertar el vuelo en el árbol
-    rbt.put(delay_tree, key, flight)
-
-
-def add_by_airline(catalog, flight):
-    """
-    Inserta un vuelo en el índice de aerolíneas.
-    """
-    code = flight.get("carrier")
-    if code is None:
-        code = "Unknown"
-    entry = mp.get(catalog["by_airline"], code)
-    if entry is None:
-        flights_list = lt.new_list()
-        mp.put(catalog["by_airline"], code, flights_list)
-    else:
-        flights_list = entry
-    lt.add_last(flights_list, flight)
-
-
-def add_by_dest(catalog, flight):
-    """
-    Inserta un vuelo en el índice de aeropuertos destino.
-    """
-    dest = flight.get("dest")
-    if dest is None:
-        dest = "Unknown"
-    entry = mp.get(catalog["by_dest"], dest)
-    if entry is None:
-        flights_list = lt.new_list()
-        mp.put(catalog["by_dest"], dest, flights_list)
-    else:
-        flights_list = entry
-    lt.add_last(flights_list, flight)
-
-
-def add_by_date(catalog, flight):
-    """
-    Inserta un vuelo en el árbol ordenado por fecha.
-    """
-    date_key = flight.get("date", "Unknown")
-    entry = rbt.get(catalog["by_date"], date_key)
-    if entry is None:
-        flights_list = lt.new_list()
-        rbt.put(catalog["by_date"], date_key, flights_list)
-    else:
-        flights_list = entry
-    lt.add_last(flights_list, flight)
-
-# Funciones de consulta sobre el catálogo
-
-'''
-
 def req_1(catalog, airline_code, min_delay, max_delay):
     start = get_time()
 
-    # 1️⃣ Buscar lista de vuelos de esa aerolínea en el RBT
+    # 1️Buscar lista de vuelos de esa aerolínea en el RBT
     flights = rbt.get(catalog["by_airline"], airline_code)
     if not flights:
         return {
@@ -391,7 +202,7 @@ def req_1(catalog, airline_code, min_delay, max_delay):
             "filtered": lt.new_list()
         }
 
-    # 2️⃣ Filtrar vuelos dentro del rango de retraso
+    # Filtrar vuelos dentro del rango de retraso
     filtered = lt.new_list()
     size = lt.size(flights)
     for i in range(size):
@@ -400,7 +211,7 @@ def req_1(catalog, airline_code, min_delay, max_delay):
         if delay is not None and min_delay <= delay <= max_delay:
             lt.add_last(filtered, f)
 
-    # 3️⃣ Ordenar por retraso ascendente, luego fecha y hora
+    # 3️Ordenar por retraso ascendente, luego fecha y hora
     def cmp(f1, f2):
         if f1["dep_delay"] != f2["dep_delay"]:
             return f1["dep_delay"] < f2["dep_delay"]
@@ -410,11 +221,11 @@ def req_1(catalog, airline_code, min_delay, max_delay):
 
     sorted_filtered = lt.merge_sort(filtered, cmp)
 
-    # 4️⃣ Calcular totales y tiempos
+    # Calcular totales y tiempos
     total = lt.size(sorted_filtered)
     end = time.perf_counter()
 
-    # 5️⃣ Sublistas de primeros y últimos 5
+    # Sublistas de primeros y últimos 5
     first5 = lt.sub_list(sorted_filtered, 0, min(5, total))
     last5 = lt.sub_list(sorted_filtered, max(0, total - 5), min(5, total))
 
@@ -441,7 +252,7 @@ def req_3(catalog, carrier, dest, min_dist, max_dist):
 
     start = get_time()
 
-    airline_map = mp.get(catalog["by_airline_dest_distance"], carrier)
+    airline_map = mp.get(catalog["by_distance"], carrier)
     if airline_map is None:
         end = get_time()
         return {
