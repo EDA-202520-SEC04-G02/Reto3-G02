@@ -323,101 +323,102 @@ def req_3(catalog, carrier, dest, min_dist, max_dist):
     }
 
 def req_4(catalog, date_start, date_end, time_start, time_end, top_n):
-    """
-    Requerimiento 4:
-    Para un rango de fechas y franja horaria de salida,
-    identificar las N aerolíneas con mayor número de vuelos
-    y, de cada una, obtener el vuelo con menor duración.
-    """
-    # TOD DONE: Modificar el requerimiento 4
 
     start = get_time()
 
-    # Convertir fechas y horas de entrada a objetos datetime
-    date_start = datetime.strptime(date_start, "%Y-%m-%d")
-    date_end = datetime.strptime(date_end, "%Y-%m-%d")
+    # ===========================================
+    # 1) CREAR LA SINGLE LINKED LIST
+    # ===========================================
+    date_lists = sl.new_list()   # <--- TU LISTA ENLAZADA SIMPLEMENTE LAMARCA
 
-    def parse_hour(hstr):
-        return datetime.strptime(hstr, "%H:%M").time()
+    # ===========================================
+    # 2) LLAMAR CORRECTAMENTE A values_range
+    # ===========================================
+    rbt.values_range(catalog["by_date"]["root"], date_start, date_end, date_lists)
 
-    time_start = parse_hour(time_start)
-    time_end = parse_hour(time_end)
+    # Ahora date_lists ES la lista con TODOS LOS LISTADOS DE VUELOS por día
+    # Cada elemento es una lista de vuelos pertenecientes a ese día.
 
-    # Estructura de agregación por aerolínea
+    # ===========================================
+    # 3) RESTO DEL CÓDIGO IGUAL QUE ANTES
+    # ===========================================
     mp_airlines = mp.new_map(200, 0.5)
 
-    flights_list = catalog["flights"]
+    # Recorrer lista enlazada
+    node = date_lists["first"]
 
-    for i in range(0, lt.size(flights_list)):
-        flight = lt.get_element(flights_list, i)
+    while node is not None:
+        day_list = node["info"]    # lista de vuelos del día
 
-        # Validar datos mínimos
-        if not flight.get("date") or not flight.get("sched_dep_time"):
-            continue
+        # recorrer vuelos
+        for i in range(lt.size(day_list)):
+            flight = lt.get_element(day_list, i)
 
-        # Parsear fecha y hora
-        try:
-            f_date = datetime.strptime(flight["date"], "%Y-%m-%d")
-            f_time = datetime.strptime(flight["sched_dep_time"], "%H:%M").time()
-        except Exception:
-            continue
+            t = flight["sched_dep_time"]
+            if not t:
+                continue
 
-        # Filtrar por rango de fecha y hora
-        if not (date_start <= f_date <= date_end):
-            continue
-        if not (time_start <= f_time <= time_end):
-            continue
+            if t < time_start or t > time_end:
+                continue
 
-        carrier = flight.get("carrier")
-        if not carrier:
-            continue
+            carrier = flight["carrier"]
+            if not carrier:
+                continue
 
-        # Obtener duración (air_time) y distancia
-        dur = float(flight.get("air_time", 0))
-        dist = float(flight.get("distance", 0))
+            dur = flight["duration"]
+            dist = flight["distance"]
 
-        # Buscar o crear entrada para la aerolínea
-        record = mp.get(mp_airlines, carrier)
-        if record is None:
-            record = {
-                "carrier": carrier,
-                "total_vuelos": 0,
-                "sum_duracion": 0.0,
-                "sum_distancia": 0.0,
-                "min_flight": None
-            }
-            mp.put(mp_airlines, carrier, record)
+            rec = mp.get(mp_airlines, carrier)
+            if rec is None:
+                rec = {
+                    "carrier": carrier,
+                    "total_vuelos": 0,
+                    "sum_duracion": 0.0,
+                    "sum_distancia": 0.0,
+                    "min_flight": None
+                }
+                mp.put(mp_airlines, carrier, rec)
 
-        # Actualizar agregados
-        record["total_vuelos"] += 1
-        record["sum_duracion"] += dur
-        record["sum_distancia"] += dist
+            rec["total_vuelos"] += 1
+            rec["sum_duracion"] += dur
+            rec["sum_distancia"] += dist
 
-        # Actualizar vuelo mínimo
-        min_f = record["min_flight"]
-        if min_f is None or dur < float(min_f.get("air_time", 1e9)) or (
-            dur == float(min_f.get("air_time", 1e9)) and flight["sched_dep_time"] < min_f["sched_dep_time"]
-        ):
-            record["min_flight"] = flight
+            best = rec["min_flight"]
+            if best is None:
+                rec["min_flight"] = flight
+            else:
+                if dur < best["duration"]:
+                    rec["min_flight"] = flight
+                elif dur == best["duration"]:
+                    if flight["date"] < best["date"]:
+                        rec["min_flight"] = flight
+                    elif flight["date"] == best["date"] and flight["sched_dep_time"] < best["sched_dep_time"]:
+                        rec["min_flight"] = flight
 
-    # Crear priority queue para ordenar por número de vuelos (desc)
+        node = node["next"]
+
+    # ============================================================
+    # Priority Queue → igual que antes
+    # ============================================================
     pq_top = pq.new_heap(is_min_pq=True)
-    
-    # Recorrer aerolíneas y agregarlas al heap
-    for carrier in mp.key_set(mp_airlines)["elements"]:
-        data = mp.get(mp_airlines, carrier)
-        total = data["total_vuelos"]
-        # Negar total para crear max-heap (la PQ tuya suele ser min-heap)
-        pq.insert(pq_top, (-total, carrier), data)
 
-    # Extraer las N primeras
+    keys = mp.key_set(mp_airlines)
+    for i in range(lt.size(keys)):
+        carrier = lt.get_element(keys, i)
+        rec = mp.get(mp_airlines, carrier)
+        total = rec["total_vuelos"]
+        pq.insert(pq_top, (-total, carrier), rec)
+
     top_list = lt.new_list()
     count = 0
+
     while not pq.is_empty(pq_top) and count < top_n:
-        data = pq.remove(pq_top)
-        data["prom_duracion"] = data["sum_duracion"] / data["total_vuelos"]
-        data["prom_distancia"] = data["sum_distancia"] / data["total_vuelos"]
-        lt.add_last(top_list, data)
+        rec = pq.remove(pq_top)
+
+        rec["prom_duracion"] = rec["sum_duracion"] / rec["total_vuelos"]
+        rec["prom_distancia"] = rec["sum_distancia"] / rec["total_vuelos"]
+
+        lt.add_last(top_list, rec)
         count += 1
 
     end = get_time()
@@ -428,7 +429,6 @@ def req_4(catalog, date_start, date_end, time_start, time_end, top_n):
         "top_airlines": top_list,
         "total_airlines": count
     }
-
 
 def req_5(catalog, date_start, date_end, dest_code, top_n):
     """

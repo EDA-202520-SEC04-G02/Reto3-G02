@@ -274,55 +274,66 @@ def print_req_3(control):
     print(tabulate(table, headers=headers, tablefmt="grid"))
 
 def print_req_4(control):
+    
+    
     """
-    Imprime los resultados del Requerimiento 4:
-    Top N aerolíneas con más vuelos en rango de fechas y horas.
+    Imprime el resultado del requerimiento 4.
     """
-    # TODO DONE: Imprimir el resultado del requerimiento 4
-
-    date_start = input("Ingrese la fecha inicial (YYYY-MM-DD): ").strip()
-    date_end = input("Ingrese la fecha final (YYYY-MM-DD): ").strip()
-    time_start = input("Ingrese la hora inicial (HH:MM): ").strip()
-    time_end = input("Ingrese la hora final (HH:MM): ").strip()
-    top_n = int(input("Ingrese la cantidad N de aerolíneas a mostrar: "))
+    print("\n=== Requerimiento 4 ===")
+    date_start = input("Fecha inicial (YYYY-MM-DD): ").strip()
+    date_end = input("Fecha final (YYYY-MM-DD): ").strip()
+    time_start = input("Hora inicial (HH:MM): ").strip()
+    time_end = input("Hora final (HH:MM): ").strip()
+    top_n = int(input("Cantidad N de aerolíneas a mostrar: "))
 
     result = logic.req_4(control, date_start, date_end, time_start, time_end, top_n)
 
-    print("\n=== Requerimiento 4 ===")
-    print(f"Rango de fechas: {date_start} a {date_end}")
-    print(f"Franja horaria: {time_start} - {time_end}")
-    print(f"Tiempo de ejecución: {result['time_ms']:.2f} ms")
-    print(f"N aerolíneas consideradas: {result['total_airlines']}")
+    top_list = result["top_airlines"]
+    total = lt.size(top_list)
 
-    airlines = result["top_airlines"]
-
-    if lt.size(airlines) == 0:
-        print("No se encontraron vuelos en el rango especificado.")
-        return
+    # Si >10, mostrar 5 primeros y 5 últimos
+    if total > 10:
+        indices = list(range(5)) + list(range(total - 5, total))
+    else:
+        indices = list(range(total))
 
     headers = [
-        "carrier", "total_vuelos", "prom_duracion", "prom_distancia",
-        "min_flight_id", "min_flight_date", "min_flight_sched", "origin", "dest", "duracion"
+        "Código",
+        "Total Vuelos",
+        "Prom. Duración",
+        "Prom. Distancia",
+        "ID Mínimo",
+        "Código Vuelo",
+        "Fecha",
+        "Hora Programada",
+        "Origen",
+        "Destino",
+        "Duración"
     ]
+
     table = []
 
-    for i in range(0, lt.size(airlines)):
-        a = lt.get_element(airlines, i)
-        min_f = a["min_flight"]
-        table.append([
-            a["carrier"],
-            a["total_vuelos"],
-            round(a["prom_duracion"], 2),
-            round(a["prom_distancia"], 2),
-            min_f.get("id", ""),
-            min_f.get("date", ""),
-            min_f.get("sched_dep_time", ""),
-            min_f.get("origin", ""),
-            min_f.get("dest", ""),
-            min_f.get("air_time", "")
-        ])
+    for i in indices:
+        rec = lt.get_element(top_list, i)
+        minf = rec["min_flight"]
+
+        row = [
+            rec["carrier"],
+            rec["total_vuelos"],
+            round(rec["prom_duracion"], 2),
+            round(rec["prom_distancia"], 2),
+            minf["id"],
+            minf["flight"],
+            minf["date"],
+            minf["sched_dep_time"] or "Unknown",
+            minf["origin"],
+            minf["dest"],
+            minf["duration"]
+        ]
+        table.append(row)
 
     print(tabulate(table, headers=headers, tablefmt="grid"))
+
 
 
 def print_req_5(control):
