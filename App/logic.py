@@ -252,34 +252,66 @@ def req_3(catalog, carrier, dest, min_dist, max_dist):
 
     start = get_time()
 
-    airline_map = mp.get(catalog["by_distance"], carrier)
-    if airline_map is None:
-        end = get_time()
-        return {
-            "carrier": carrier,
-            "dest": dest,
-            "total_in_range": 0,
-            "flights": lt.new_list(),
-            "time_ms": delta_time(start, end)
-        }
+    flights_list = catalog["flights"]
+    n_flights = lt.size(flights_list)
 
-    distance_tree = mp.get(airline_map, dest)
-    if distance_tree is None:
-        end = get_time()
-        return {
-            "carrier": carrier,
-            "dest": dest,
-            "total_in_range": 0,
-            "flights": lt.new_list(),
-            "time_ms": delta_time(start, end)
-        }
+    min_dist = float(min_dist)
+    max_dist = float(max_dist)
 
-    # Buscar en el árbol de distancias
+    distance_tree = rbt.new_map()
+
+    i = 0
+    while i < n_flights:
+        flight = lt.get_element(flights_list, i)
+
+        process = True
+
+        f_carrier = flight.get("carrier")
+        f_dest = flight.get("dest")
+        f_date = flight.get("date")
+        f_arr_time = flight.get("arr_time")  
+        f_distance = flight.get("distance", 0)
+
+        
+        if not f_carrier or not f_dest or not f_date:
+            process = False
+
+        if process:
+            if f_carrier != carrier:
+                process = False
+
+        if process:
+            if f_dest != dest:
+                process = False
+
+        if process:
+            dist_val = float(f_distance)
+            if dist_val < min_dist or dist_val > max_dist:
+                process = False
+
+        if process:
+            
+            if f_arr_time is None:
+                arr_str = "00:00"
+            else:
+                arr_str = f_arr_time
+
+           
+            key = (dist_val, f"{f_date}_{arr_str}")
+
+           
+            rbt.put(distance_tree, key, flight)
+
+        i += 1
+
+    
     key_min = (min_dist, "")
-    key_max = (max_dist, "zzz")
+    key_max = (max_dist, "zzzzzz")
     flights_in_range = rbt.values(distance_tree, key_min, key_max)
 
+    
     total = sl.size(flights_in_range)
+
     end = get_time()
 
     return {
