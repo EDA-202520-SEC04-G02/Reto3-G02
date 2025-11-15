@@ -223,7 +223,7 @@ def req_1(catalog, airline_code, min_delay, max_delay):
 
     # Calcular totales y tiempos
     total = lt.size(sorted_filtered)
-    end = time.perf_counter()
+    end = get_time() #<-- CORREGIDO
 
     # Sublistas de primeros y últimos 5
     first5 = lt.sub_list(sorted_filtered, 0, min(5, total))
